@@ -1,94 +1,208 @@
 <head>
-  <style>
-    body {
-      background: #000;
-      font-family: FreeSans, sans-serif;
-    }
-    #time, #info {
-      display: inline-block;
-      padding: 0;
-      margin: 0;
-    }
-  </style>
+	<style>
+		html, body {
+			margin: 4px;
+			color: #ddd;
+			background: #000;
+			font-family: sans-serif;
+		}
+
+		#time, #info {
+			display: inline-block;
+			padding: 0;
+			margin: 0;
+		}
+
+		h1,h2,p {
+			margin: 0;
+			margin-bottom: 5px;
+		}
+
+		hr {
+			border-top: 1px solid white;
+		}
+
+		#square {
+			max-width: 500px;
+			height: 50px;
+		}
+	</style>
 </head>
 <body>
-  <h1 id="time"></h1>
-  <p id="info"></p>
-  <audio id="time-is-now"><source src="time-is-now.mp3" type="audio/mpeg"></audio>
-  <audio id="point-blank"><source src="point-blank.mp3" type="audio/mpeg"></audio>
-  <script>
-  try {
+	<h1>Time-boxing timer <span id="is-paused">- paused</span></h1>
+	<div class="buttons">
+		<button id="startButton">Start / Pause</button>
+		<button id="resetButton">Reset</button>
+		<button id="audioButton">Enable Audio</button>
+	</div>
+	<!--ul>
+		<li><input type="text"><button>-</button><button>up</button><button>down</button></li>
+		<li><button>add</button></li>
+	</ul-->
+	<!--p id="enable-sound">click on page to enable sound</button-->
+	<hr>
+	<h2>current action: <span id="target"></span></h2>
+	<div>time: <span id="count"></span>s left</div>
+	<p>timings: <span id="timings">9-27-9-10</span></p>
+	<div id="square"></div>
+	<audio id="time-is-now"><source src="time-is-now.mp3" type="audio/mpeg"></audio>
+	<audio id="point-blank"><source src="point-blank.mp3" type="audio/mpeg"></audio>
+	<script> try {
 
-    const permutations = function(str) {
-      let arr = [];
-
-      arr.push(str[0] + str[1] + str[2]);
-      arr.push(str[0] + str[2] + str[1]);
-      arr.push(str[1] + str[0] + str[2]);
-      arr.push(str[1] + str[2] + str[0]);
-      arr.push(str[2] + str[0] + str[1]);
-      arr.push(str[2] + str[1] + str[0]);
-
-      return arr
-    };
-
-    const COLOR = permutations("d29").map((e) => ('#'+e));
-
-    let coef = 0.7;
-    let cycleDuration = 147;
-    let reactionTime = 2;
-
-    let state = 0; // 0 - reaction, 1 - anki, 2 - anime
-    let startTime = performance.now();
-    let canPlay = true;
-
-    let ankiTime = Math.floor((cycleDuration - 2 * reactionTime) * coef);
-    let animeTime = cycleDuration - ankiTime - 2 * reactionTime;
-
-    const el = document.getElementById('time');
-    document.getElementById('info').innerHTML = '' + ankiTime + ' / ' + animeTime + ' - ' + coef;
-
-    const firstSound = document.getElementById("point-blank");
-    const secondSound = document.getElementById("time-is-now");
-
-    const update = function() {
-      const time = performance.now();
-      const d = Math.floor((time - startTime) / 1000) % (2 * reactionTime + ankiTime + animeTime); 
-      let text, color;
+var isWorking = false;
+var audioEnabled = false;
+var timerId;
+var timerStep = 50;
+var currentState = 0;
+var restTime;
+var prevTime;
+var prevState = -1;
 
 
-	    if (d < reactionTime){
-		    if (canPlay) firstSound.play();
-		    canPlay = false;
-		    text = "Switch to anki";
-		    color = 0;
-	    } else if (d < reactionTime + ankiTime) {
-		    canPlay = true;
-		    text = "Anki";
-		    color = 1;
+var elems = {};
+var audio = ["point-blank", "time-is-now"];
+var buttonEl = {};
+var state = [{
+	text: "switching to anki",
+	audio: audio[0],
+	time: 2,
+	color: "#d29",
+}, {
+	text: "anki",
+	time: 100,
+	color: "#d92",
+}, {
+	text: "switching to anime",
+	audio: audio[1],
+	time: 2,
+	color: "#2d9"
+}, {
+	text: "anime",
+	time: 43,
+	color: "#29d"
+}];
 
-	    } else if (d < reactionTime + ankiTime + reactionTime) {
-		    if (canPlay) secondSound.play()
-		    canPlay = false;
-		    text = "Switch to anime";
-		    color = 2;
-	    }
-	    else if (d < reactionTime + ankiTime + reactionTime + animeTime) {
+var $ = function(id) {
+	return document.getElementById(id);
+};
 
-	    text = "Anime :)";
-		    color = 3;
-		    canPlay = true;
-	    }
+var doStop = function() {
+	isWorking = false;
+	clearTimeout(timerId);
+	prevState = -1;
+};
 
-      
-      el.innerText = text + " " + d;
-      document.body.style.color = COLOR[color];
+var doStart = function() {
+	isWorking = true;
+	timerId = setTimeout(timerUpdate, timerStep);
+	prevTime = performance.now();
+};
+
+var doReset = function() {
+	doStop();
+	currentState = 0;
+	restTime = state[0].time;
+};
+
+var timerUpdate = function() {
+	var nowTime = performance.now();
+	var delta = (nowTime - prevTime) * 1e-3;
+	prevTime = nowTime;
+	restTime -= delta;
+	if (restTime <= 0) {
+		currentState = (currentState + 1) % state.length;
+		restTime += state[currentState].time			
+	}
+
+	render();
+	timerId = setTimeout(timerUpdate, timerStep);
+};
 
 
-    };
-    setInterval(update, 1000);
-} catch (e) {
-  alert(e);
-}
-  </script>
+var init = function(){
+	window.addEventListener('hashchange', prepareTimings);
+	prepareTimings();
+
+
+
+	$('startButton').addEventListener('click', function() {
+		debugger;
+		if (isWorking) doStop();
+		else doStart();
+	});
+
+	$('resetButton').addEventListener('click', doReset);
+
+	$('audioButton').addEventListener('click', function() {
+		console.log('hi')
+		audioEnabled = !audioEnabled;
+		if (audioEnabled) {
+			$('audioButton').innerHTML = 'Disable Audio';
+		} else {
+			$('audioButton').innerHTML = 'Enable Audio'
+		}
+	})
+	// buttonEl.pause.addEventListener('click', doPause);
+	// buttonEl.reset.addEventListener('click', );
+	// buttonEl.audio.addEventListener('click', doStart);
+	// document.addEventListener('click', )
+	// launch();
+
+	window.requestAnimationFrame(render);
+};
+
+prepareTimings = function() {
+
+	if (location.hash.slice(1) == '') {
+		location.hash = "2-100-2-43";
+		return;
+	}
+
+	var hash = location.hash.slice(1);
+	var nums = hash.split('-').map(function(e){return parseInt(e)}).filter(function(e){return e == e});
+
+	if (nums.length >= 4) {
+		for (var i = 0; i < 4; i++) {
+			state[i].time = nums[i];
+		}
+	} else {
+		location.hash = '2-100-2-43';
+	}
+
+	doReset();
+
+
+	//window.requestAnimationFrame(intervalUpdate);
+	//prevTime = performance.now();
+};
+
+var render = function() {
+	var curr = state[currentState];
+
+	var time = ''+Math.floor(restTime * 10);
+	if (time.length == 1) time = '0'+time;
+
+	$('count').innerHTML = time.slice(0, -1)+'.'+time.slice(-1);
+	$('target').innerHTML = curr.text;
+	$('timings').innerHTML = location.hash.slice(1);
+	$('is-paused').style.visibility = (isWorking ? 'hidden' : 'visible');
+
+	if (!audioEnabled) {
+		prevState = -1;
+	}
+
+	if (curr.audio != null && prevState != currentState && isWorking == true && audioEnabled) {
+		$(curr.audio).play();
+		prevState = currentState;
+	}
+
+	$('square').style.backgroundColor = curr.color;
+	window.requestAnimationFrame(render);
+};
+
+
+
+
+init(); } catch (e) { alert(e); }
+	</script>
 </body>
